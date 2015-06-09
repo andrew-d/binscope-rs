@@ -79,14 +79,15 @@ fn check(buf: &[u8]) {
 }
 
 
-fn main() {
-  let input_path = "test_binaries/x64/CompileFlags-no-GS.exe";
-
+fn with_file_mmap<P, F, T>(path: P, f: F) -> T
+    where P: std::convert::AsRef<std::path::Path>,
+          F: Fn(&[u8]) -> T
+{
   let file = fs::OpenOptions::new()
     .create(true)
     .read(true)
     .write(true)
-    .open(input_path)
+    .open(path)
     .unwrap();
 
   let fd = get_fd(&file);
@@ -97,8 +98,19 @@ fn main() {
     MapOption::MapFd(fd),
   ]).unwrap();
 
-  let file_data: &[u8] = unsafe { std::slice::from_raw_parts(chunk.data() as *const _, chunk.len()) };
+  let file_data: &[u8] = unsafe {
+    std::slice::from_raw_parts(chunk.data() as *const _, chunk.len())
+  };
 
-  println!("Mapped the file");
-  check(file_data);
+  f(file_data)
+}
+
+
+fn main() {
+  let input_path = "test_binaries/x64/CompileFlags-no-GS.exe";
+
+  with_file_mmap(input_path, |buf| {
+    println!("Mapped the file");
+    check(buf);
+  });
 }
