@@ -1,7 +1,9 @@
+use std::cmp;
 use std::io::Cursor;
 
 use byteorder::{ReadBytesExt, LittleEndian};
 use nom::{IResult, le_i32, le_u8, le_u16, le_u32, le_u64};
+
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
@@ -221,6 +223,78 @@ fn file_header(input: &[u8]) -> IResult<&[u8], FileHeader> {
 }
 
 
+/// Copy of the old count! macro before it switched to fixed-size arrays, and
+/// with a slight optimization to use Vec::with_capacity instead of Vec::new.
+macro_rules! vec_count(
+  ($i:expr, $submac:ident!( $($args:tt)* ), $count: expr) => (
+    {
+      let mut begin = 0;
+      let mut remaining = $i.len();
+      let mut res = Vec::with_capacity($count);
+      let mut cnt = 0;
+      let mut err = false;
+      loop {
+        match $submac!(&$i[begin..], $($args)*) {
+          ::nom::IResult::Done(i,o) => {
+            res.push(o);
+            begin += remaining - i.len();
+            remaining = i.len();
+            cnt = cnt + 1;
+            if cnt == $count {
+              break
+            }
+          },
+          ::nom::IResult::Error(_)  => {
+            err = true;
+            break;
+          },
+          ::nom::IResult::Incomplete(_) => {
+            break;
+          }
+        }
+      }
+      if err {
+        ::nom::IResult::Error(::nom::Err::Position(::nom::ErrorCode::Count as u32,$i))
+      } else if cnt == $count {
+        ::nom::IResult::Done(&$i[begin..], res)
+      } else {
+        ::nom::IResult::Incomplete(::nom::Needed::Unknown)
+      }
+    }
+  );
+  ($i:expr, $f:expr, $count: expr) => (
+    vec_count!($i, call!($f), $count);
+  );
+);
+
+
+#[allow(non_snake_case)]
+fn parse_data_directory(input: &[u8]) -> IResult<&[u8], DataDirectory> {
+  chain!(input,
+    virtualAddress: le_u32 ~
+    size:           le_u32 ,
+
+    || {
+      DataDirectory {
+        VirtualAddress: virtualAddress,
+        Size:           size,
+      }
+    }
+  )
+}
+
+
+fn parse_data_directories(input: &[u8], count: u32) -> IResult<&[u8], Vec<DataDirectory>> {
+  let min_count = cmp::min(count, 0x10) as usize;
+  println!("DataDirectory min count = {}", min_count);
+
+  vec_count!(input,
+    parse_data_directory,
+    min_count
+  )
+}
+
+
 #[allow(non_snake_case)]
 fn optional_header_32(input: &[u8]) -> IResult<&[u8], OptionalHeader32> {
   chain!(input,
@@ -253,10 +327,11 @@ fn optional_header_32(input: &[u8]) -> IResult<&[u8], OptionalHeader32> {
     sizeOfHeapReserve:           le_u32 ~
     sizeOfHeapCommit:            le_u32 ~
     loaderFlags:                 le_u32 ~
-    numberOfRvaAndSizes:         le_u32 ,
+    numberOfRvaAndSizes:         le_u32 ~
+    dataDirectory:               apply!(parse_data_directories, numberOfRvaAndSizes) ,
 
     || {
-      OptionalHeader32 {
+      let mut ret = OptionalHeader32 {
         Magic:                       magic,
         MajorLinkerVersion:          majorLinkerVersion,
         MinorLinkerVersion:          minorLinkerVersion,
@@ -287,10 +362,14 @@ fn optional_header_32(input: &[u8]) -> IResult<&[u8], OptionalHeader32> {
         SizeOfHeapCommit:            sizeOfHeapCommit,
         LoaderFlags:                 loaderFlags,
         NumberOfRvaAndSizes:         numberOfRvaAndSizes,
+        DataDirectory:               [DataDirectory{VirtualAddress: 0, Size: 0}; IMAGE_NUMBEROF_DIRECTORY_ENTRIES]
+      };
 
-        // TODO
-        DataDirectory:               [DataDirectory{VirtualAddress: 0, Size: 0}; IMAGE_NUMBEROF_DIRECTORY_ENTRIES],
+      for (i, dir) in dataDirectory.iter().enumerate() {
+        ret.DataDirectory[i] = *dir;
       }
+
+      ret
     }
   )
 }
@@ -328,10 +407,11 @@ fn optional_header_64(input: &[u8]) -> IResult<&[u8], OptionalHeader64> {
     sizeOfHeapReserve:           le_u64 ~
     sizeOfHeapCommit:            le_u64 ~
     loaderFlags:                 le_u32 ~
-    numberOfRvaAndSizes:         le_u32 ,
+    numberOfRvaAndSizes:         le_u32 ~
+    dataDirectory:               apply!(parse_data_directories, numberOfRvaAndSizes) ,
 
     || {
-      OptionalHeader64 {
+      let mut ret = OptionalHeader64 {
         Magic:                       magic,
         MajorLinkerVersion:          majorLinkerVersion,
         MinorLinkerVersion:          minorLinkerVersion,
@@ -362,10 +442,14 @@ fn optional_header_64(input: &[u8]) -> IResult<&[u8], OptionalHeader64> {
         SizeOfHeapCommit:            sizeOfHeapCommit,
         LoaderFlags:                 loaderFlags,
         NumberOfRvaAndSizes:         numberOfRvaAndSizes,
+        DataDirectory:               [DataDirectory{VirtualAddress: 0, Size: 0}; IMAGE_NUMBEROF_DIRECTORY_ENTRIES]
+      };
 
-        // TODO
-        DataDirectory:               [DataDirectory{VirtualAddress: 0, Size: 0}; IMAGE_NUMBEROF_DIRECTORY_ENTRIES],
+      for (i, dir) in dataDirectory.iter().enumerate() {
+        ret.DataDirectory[i] = *dir;
       }
+
+      ret
     }
   )
 }
