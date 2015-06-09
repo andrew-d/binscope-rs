@@ -268,6 +268,7 @@ macro_rules! vec_count(
 );
 
 
+// TODO: remove parse_ prefix?
 #[allow(non_snake_case)]
 fn parse_data_directory(input: &[u8]) -> IResult<&[u8], DataDirectory> {
   chain!(input,
@@ -284,9 +285,9 @@ fn parse_data_directory(input: &[u8]) -> IResult<&[u8], DataDirectory> {
 }
 
 
+// TODO: remove parse_ prefix?
 fn parse_data_directories(input: &[u8], count: u32) -> IResult<&[u8], Vec<DataDirectory>> {
   let min_count = cmp::min(count, 0x10) as usize;
-  println!("DataDirectory min count = {}", min_count);
 
   vec_count!(input,
     parse_data_directory,
