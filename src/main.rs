@@ -81,14 +81,13 @@ fn check(buf: &[u8]) {
 }
 
 
+// TODO: real error handling (std::io::Error?)
 fn with_file_mmap<P, F, T>(path: P, f: F) -> T
     where P: std::convert::AsRef<std::path::Path>,
           F: Fn(&[u8]) -> T
 {
   let file = fs::OpenOptions::new()
-    .create(true)
     .read(true)
-    .write(true)
     .open(path)
     .unwrap();
 
@@ -96,7 +95,6 @@ fn with_file_mmap<P, F, T>(path: P, f: F) -> T
 
   let chunk = MemoryMap::new(1, &[
     MapOption::MapReadable,
-    MapOption::MapWritable,
     MapOption::MapFd(fd),
   ]).unwrap();
 
