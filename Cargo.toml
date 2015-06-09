@@ -4,8 +4,12 @@ version = "0.0.1"
 authors = ["Andrew Dunham <andrew@du.nham.ca>"]
 
 [dependencies]
+ansi_term = "*"
 byteorder = "*"
 clap = "*"
+fern = "0.3"
 libc = "*"
+log = "0.3"
 mmap = "*"
 nom = "~0.3.0"
+time = "0.1"
