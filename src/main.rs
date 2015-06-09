@@ -39,7 +39,7 @@ fn check(buf: &[u8]) {
   let dos_header = match parse_dos_header(buf) {
     IResult::Done(_, header) => {
       println!("Parsed DOS header");
-      println!("{:?}", header);
+      println!("{:#?}", header);
 
       header
     }
@@ -69,7 +69,7 @@ fn check(buf: &[u8]) {
   let nt_headers = match parse_nt_headers(&buf[offset..]) {
     IResult::Done(_, header) => {
       println!("Parsed NT headers");
-      println!("{:?}", header);
+      println!("{:#?}", header);
 
       header
     }
