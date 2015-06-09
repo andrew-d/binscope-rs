@@ -30,27 +30,25 @@ pub struct DosHeader {
 
 pub fn parse_dos_header(input: &[u8]) -> IResult<&[u8], DosHeader> {
   chain!(input,
-    tag!("MZ")         ~
-    e_cblp:     le_u16 ~
-    e_cp:       le_u16 ~
-    e_crlc:     le_u16 ~
-    e_cparhdr:  le_u16 ~
-    e_minalloc: le_u16 ~
-    e_maxalloc: le_u16 ~
-    e_ss:       le_u16 ~
-    e_sp:       le_u16 ~
-    e_csum:     le_u16 ~
-    e_ip:       le_u16 ~
-    e_cs:       le_u16 ~
-    e_lfarlc:   le_u16 ~
-    e_ovno:     le_u16 ~
-    //e_res:      le_u16 ~  TODO
-    take!(8)           ~
-    e_oemid:    le_u16 ~
-    e_oeminfo:  le_u16 ~
-    //e_res2:     le_u16 ~  TODO
-    take!(20)          ~
-    e_lfanew:   le_i32 ,
+    tag!("MZ")                            ~
+    e_cblp:     le_u16                    ~
+    e_cp:       le_u16                    ~
+    e_crlc:     le_u16                    ~
+    e_cparhdr:  le_u16                    ~
+    e_minalloc: le_u16                    ~
+    e_maxalloc: le_u16                    ~
+    e_ss:       le_u16                    ~
+    e_sp:       le_u16                    ~
+    e_csum:     le_u16                    ~
+    e_ip:       le_u16                    ~
+    e_cs:       le_u16                    ~
+    e_lfarlc:   le_u16                    ~
+    e_ovno:     le_u16                    ~
+    e_res:      count!( le_u16, u16, 4 )  ~
+    e_oemid:    le_u16                    ~
+    e_oeminfo:  le_u16                    ~
+    e_res2:     count!( le_u16, u16, 10 ) ~
+    e_lfanew:   le_i32                    ,
     || {
       DosHeader {
         e_magic:    0x5A4D, // 'MZ',
@@ -67,12 +65,10 @@ pub fn parse_dos_header(input: &[u8]) -> IResult<&[u8], DosHeader> {
         e_cs:       e_cs,
         e_lfarlc:   e_lfarlc,
         e_ovno:     e_ovno,
-        //e_res:      le_u16 ~  TODO
-        e_res: [0; 4],
+        e_res:      e_res,
         e_oemid:    e_oemid,
         e_oeminfo:  e_oeminfo,
-        //e_res2:     le_u16 ~  TODO
-        e_res2: [0; 10],
+        e_res2:     e_res2,
         e_lfanew:   e_lfanew,
       }
     }
