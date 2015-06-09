@@ -1,0 +1,10 @@
+[package]
+name = "binscope"
+version = "0.0.1"
+authors = ["Andrew Dunham <andrew@du.nham.ca>"]
+
+[dependencies]
+byteorder = "*"
+libc = "*"
+mmap = "*"
+nom = "~0.3.0"
