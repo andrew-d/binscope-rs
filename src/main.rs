@@ -1,6 +1,7 @@
 #![feature(trace_macros)]
 
 extern crate byteorder;
+extern crate clap;
 extern crate libc;
 extern crate mmap;
 #[macro_use] extern crate nom;
@@ -9,6 +10,7 @@ mod pe;
 
 use std::fs;
 
+use clap::{App, Arg};
 use mmap::{MemoryMap, MapOption};
 use nom::{IResult};
 
@@ -107,10 +109,30 @@ fn with_file_mmap<P, F, T>(path: P, f: F) -> T
 
 
 fn main() {
-  let input_path = "test_binaries/x64/CompileFlags-no-GS.exe";
+  let matches = App::new("binscope")
+                          .version("0.0.1")
+                          .author("Andrew Dunham <andrew@du.nham.ca>")
+                          .about("Checks a PE file for potential security vulnerabilities")
+                          .arg(Arg::with_name("input")
+                               .help("Sets the input file(s) to check")
+                               .required(true)
+                               .multiple(true)
+                               .index(1))
+                          .arg(Arg::with_name("debug")
+                               .short("d")
+                               .multiple(true)
+                               .help("Sets the level of debugging information"))
+                          .get_matches();
 
-  with_file_mmap(input_path, |buf| {
-    println!("Mapped the file");
-    check(buf);
-  });
+  if let Some(ref input_paths) = matches.values_of("input") {
+    for input_path in input_paths {
+      println!("Checking file: {}", input_path);
+
+      with_file_mmap(input_path, |buf| {
+        check(buf);
+      });
+    }
+  } else {
+    println!("No input file(s) given");
+  }
 }

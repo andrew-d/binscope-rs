@@ -5,6 +5,7 @@ authors = ["Andrew Dunham <andrew@du.nham.ca>"]
 
 [dependencies]
 byteorder = "*"
+clap = "*"
 libc = "*"
 mmap = "*"
 nom = "~0.3.0"
