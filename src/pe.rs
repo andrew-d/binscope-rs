@@ -602,8 +602,10 @@ pub fn parse_nt_headers(input: &[u8]) -> IResult<&[u8], NtHeaders> {
   chain!(input,
     signature:   tag!("PE\0\0")                                           ~
     file_header: file_header                                              ~
-    optional_32: cond!(file_header.Machine == 0x014c, call!(optional_header_32)) ~
-    optional_64: cond!(file_header.Machine == 0x8664, call!(optional_header_64)) ,
+    optional_32: cond!(file_header.Machine == IMAGE_FILE_MACHINE_I386,
+                       call!(optional_header_32))                         ~
+    optional_64: cond!(file_header.Machine == IMAGE_FILE_MACHINE_AMD64,
+                       call!(optional_header_64))                         ,
 
     || {
       // Parse the signature - we could use the hard-coded value, but this
@@ -709,6 +711,164 @@ pub fn parse_section_header(input: &[u8]) -> IResult<&[u8], SectionHeader> {
         NumberOfRelocations:           numberOfRelocations,
         NumberOfLinenumbers:           numberOfLinenumbers,
         Characteristics:               characteristics,
+      }
+    }
+  )
+}
+
+
+#[allow(non_snake_case)]
+#[derive(Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct LoadConfigDirectory32 {
+  pub Size:                          u32,
+  pub TimeDateStamp:                 u32,
+  pub MajorVersion:                  u16,
+  pub MinorVersion:                  u16,
+  pub GlobalFlagsClear:              u32,
+  pub GlobalFlagsSet:                u32,
+  pub CriticalSectionDefaultTimeout: u32,
+  pub DeCommitFreeBlockThreshold:    u32,
+  pub DeCommitTotalFreeThreshold:    u32,
+  pub LockPrefixTable:               u32,           // VA
+  pub MaximumAllocationSize:         u32,
+  pub VirtualMemoryThreshold:        u32,
+  pub ProcessHeapFlags:              u32,
+  pub ProcessAffinityMask:           u32,
+  pub CSDVersion:                    u16,
+  pub Reserved1:                     u16,
+  pub EditList:                      u32,           // VA
+  pub SecurityCookie:                u32,           // VA
+  pub SEHandlerTable:                u32,           // VA
+  pub SEHandlerCount:                u32,
+}
+
+
+#[allow(non_snake_case)]
+#[derive(Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct LoadConfigDirectory64 {
+  pub Size:                           u32,
+  pub TimeDateStamp:                  u32,
+  pub MajorVersion:                   u16,
+  pub MinorVersion:                   u16,
+  pub GlobalFlagsClear:               u32,
+  pub GlobalFlagsSet:                 u32,
+  pub CriticalSectionDefaultTimeout:  u32,
+  pub DeCommitFreeBlockThreshold:     u64,
+  pub DeCommitTotalFreeThreshold:     u64,
+  pub LockPrefixTable:                u64,
+  pub MaximumAllocationSize:          u64,
+  pub VirtualMemoryThreshold:         u64,
+  pub ProcessAffinityMask:            u64,
+  pub ProcessHeapFlags:               u32,
+  pub CSDVersion:                     u16,
+  pub Reserved1:                      u16,
+  pub EditList:                       u64,
+  pub SecurityCookie:                 u64,
+  pub SEHandlerTable:                 u64,
+  pub SEHandlerCount:                 u64,
+}
+
+
+#[allow(non_snake_case)]
+pub fn parse_load_config_directory32(input: &[u8]) -> IResult<&[u8], LoadConfigDirectory32> {
+  chain!(input,
+    size:                          le_u32 ~
+    timeDateStamp:                 le_u32 ~
+    majorVersion:                  le_u16 ~
+    minorVersion:                  le_u16 ~
+    globalFlagsClear:              le_u32 ~
+    globalFlagsSet:                le_u32 ~
+    criticalSectionDefaultTimeout: le_u32 ~
+    deCommitFreeBlockThreshold:    le_u32 ~
+    deCommitTotalFreeThreshold:    le_u32 ~
+    lockPrefixTable:               le_u32 ~
+    maximumAllocationSize:         le_u32 ~
+    virtualMemoryThreshold:        le_u32 ~
+    processHeapFlags:              le_u32 ~
+    processAffinityMask:           le_u32 ~
+    csdVersion:                    le_u16 ~
+    reserved1:                     le_u16 ~
+    editList:                      le_u32 ~
+    securityCookie:                le_u32 ~
+    seHandlerTable:                le_u32 ~
+    seHandlerCount:                le_u32,
+
+    || {
+      LoadConfigDirectory32 {
+        Size:                          size,
+        TimeDateStamp:                 timeDateStamp,
+        MajorVersion:                  majorVersion,
+        MinorVersion:                  minorVersion,
+        GlobalFlagsClear:              globalFlagsClear,
+        GlobalFlagsSet:                globalFlagsSet,
+        CriticalSectionDefaultTimeout: criticalSectionDefaultTimeout,
+        DeCommitFreeBlockThreshold:    deCommitFreeBlockThreshold,
+        DeCommitTotalFreeThreshold:    deCommitTotalFreeThreshold,
+        LockPrefixTable:               lockPrefixTable,
+        MaximumAllocationSize:         maximumAllocationSize,
+        VirtualMemoryThreshold:        virtualMemoryThreshold,
+        ProcessHeapFlags:              processHeapFlags,
+        ProcessAffinityMask:           processAffinityMask,
+        CSDVersion:                    csdVersion,
+        Reserved1:                     reserved1,
+        EditList:                      editList,
+        SecurityCookie:                securityCookie,
+        SEHandlerTable:                seHandlerTable,
+        SEHandlerCount:                seHandlerCount,
+      }
+    }
+  )
+}
+
+
+#[allow(non_snake_case)]
+pub fn parse_load_config_directory64(input: &[u8]) -> IResult<&[u8], LoadConfigDirectory64> {
+  chain!(input,
+    size:                           le_u32 ~
+    timeDateStamp:                  le_u32 ~
+    majorVersion:                   le_u16 ~
+    minorVersion:                   le_u16 ~
+    globalFlagsClear:               le_u32 ~
+    globalFlagsSet:                 le_u32 ~
+    criticalSectionDefaultTimeout:  le_u32 ~
+    deCommitFreeBlockThreshold:     le_u64 ~
+    deCommitTotalFreeThreshold:     le_u64 ~
+    lockPrefixTable:                le_u64 ~
+    maximumAllocationSize:          le_u64 ~
+    virtualMemoryThreshold:         le_u64 ~
+    processAffinityMask:            le_u64 ~
+    processHeapFlags:               le_u32 ~
+    csdVersion:                     le_u16 ~
+    reserved1:                      le_u16 ~
+    editList:                       le_u64 ~
+    securityCookie:                 le_u64 ~
+    seHandlerTable:                 le_u64 ~
+    seHandlerCount:                 le_u64 ,
+
+    || {
+      LoadConfigDirectory64 {
+        Size:                           size,
+        TimeDateStamp:                  timeDateStamp,
+        MajorVersion:                   majorVersion,
+        MinorVersion:                   minorVersion,
+        GlobalFlagsClear:               globalFlagsClear,
+        GlobalFlagsSet:                 globalFlagsSet,
+        CriticalSectionDefaultTimeout:  criticalSectionDefaultTimeout,
+        DeCommitFreeBlockThreshold:     deCommitFreeBlockThreshold,
+        DeCommitTotalFreeThreshold:     deCommitTotalFreeThreshold,
+        LockPrefixTable:                lockPrefixTable,
+        MaximumAllocationSize:          maximumAllocationSize,
+        VirtualMemoryThreshold:         virtualMemoryThreshold,
+        ProcessAffinityMask:            processAffinityMask,
+        ProcessHeapFlags:               processHeapFlags,
+        CSDVersion:                     csdVersion,
+        Reserved1:                      reserved1,
+        EditList:                       editList,
+        SecurityCookie:                 securityCookie,
+        SEHandlerTable:                 seHandlerTable,
+        SEHandlerCount:                 seHandlerCount,
       }
     }
   )

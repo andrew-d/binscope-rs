@@ -149,12 +149,84 @@ fn check(fname: &str, buf: &[u8]) {
     OptionalHeader::Unknown          => unreachable!(),
   };
 
-  debug!("load config directory is at: 0x{:04x}", load_config_dir.VirtualAddress);
+  if load_config_dir.VirtualAddress != 0 {
+    debug!("load config directory is at VA: 0x{:04x}", load_config_dir.VirtualAddress);
 
-  // Find the load config directory in our sections.
+    // Find the load config directory in our sections.
+    let mut lcbuf = None;
+    for section in sections.iter() {
+      if section.contains_virtual_address(load_config_dir.VirtualAddress) {
+        if !section.contains_virtual_address(load_config_dir.VirtualAddress + load_config_dir.Size) {
+          error!("load config directory spans sections!");
+          break;
+        }
+
+        debug!("found load config directory in section: {:?}", section.Name);
+
+        let offset = (load_config_dir.VirtualAddress - section.VirtualAddress + section.PointerToRawData) as usize;
+
+        lcbuf = Some(&buf[offset..]);
+      }
+    }
+
+    if let Some(mbuf) = lcbuf {
+      let mut security_cookie;
+
+      if nt_headers.FileHeader.Machine == IMAGE_FILE_MACHINE_I386 {
+        let load_config = match parse_load_config_directory32(mbuf) {
+          IResult::Done(_, dir) => {
+            info!("Parsed load config directory");
+            debug!("{:#?}", dir);
+
+            dir
+          }
+          e => {
+            error!("Could not parse load config directory: {:?}", e);
+            return;
+          }
+        };
+
+        // Check for SafeSEH
+        if chars & IMAGE_DLLCHARACTERISTICS_NO_SEH == 0 {
+          if load_config.SEHandlerTable == 0 {
+            println!("{}:does not use SAFESEH", fname)
+          } else {
+            debug!("Skipping SafeSEH check since image has NO_SEH bit set");
+          }
+        }
+
+        security_cookie = load_config.SecurityCookie as u64;
+      } else {
+        let load_config = match parse_load_config_directory64(mbuf) {
+          IResult::Done(_, dir) => {
+            info!("Parsed load config directory");
+            debug!("{:#?}", dir);
+
+            dir
+          }
+          e => {
+            error!("Could not parse load config directory: {:?}", e);
+            return;
+          }
+        };
+
+        security_cookie = load_config.SecurityCookie;
+      }
+
+      if security_cookie == 0 {
+        println!("{}:does not use security cookies\n", fname)
+      }
+    } else {
+      warn!("did not find load config directory in any section");
+    }
+  }
+
+  // --------------------------------------------------
+  const RW_SECTION_FLAGS: u32 = IMAGE_SCN_MEM_SHARED | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+
   for section in sections.iter() {
-    if section.contains_virtual_address(load_config_dir.VirtualAddress) {
-      debug!("found load config directory in section: {:?}", section.Name);
+    if section.Characteristics & RW_SECTION_FLAGS == RW_SECTION_FLAGS {
+      println!("{}:has a R/W shared section {:?}\n", fname, section.Name)
     }
   }
 }
