@@ -377,15 +377,16 @@ macro_rules! vec_count(
       let mut cnt = 0;
       let mut err = false;
       loop {
+        if cnt == $count {
+          break
+        }
+
         match $submac!(&$i[begin..], $($args)*) {
           ::nom::IResult::Done(i,o) => {
             res.push(o);
             begin += remaining - i.len();
             remaining = i.len();
             cnt = cnt + 1;
-            if cnt == $count {
-              break
-            }
           },
           ::nom::IResult::Error(_)  => {
             err = true;
