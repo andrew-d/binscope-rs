@@ -170,9 +170,12 @@ fn with_file_mmap<P, F, T>(path: P, f: F) -> T
     .open(path)
     .unwrap();
 
+  // Get the size of the file.
+  let len = file.metadata().unwrap().len() as usize;
+
   let fd = get_fd(&file);
 
-  let chunk = MemoryMap::new(1, &[
+  let chunk = MemoryMap::new(len, &[
     MapOption::MapReadable,
     MapOption::MapFd(fd),
   ]).unwrap();
