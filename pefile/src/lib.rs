@@ -159,7 +159,7 @@ mod tests {
   }
 
   #[test]
-  fn test_invalid_lfanew() {
+  fn test_negative_lfanew() {
     let path = Path::new("test_binaries").join("bad").join("negative-lfanew.exe");
 
     let mut file = match File::open(&path) {
@@ -173,6 +173,20 @@ mod tests {
     };
   }
 
+  #[test]
+  fn test_too_large_lfanew() {
+    let path = Path::new("test_binaries").join("bad").join("too-large-lfanew.exe");
+
+    let mut file = match File::open(&path) {
+      Err(why) => panic!("Couldn't open {}: {}", path.display(), Error::description(&why)),
+      Ok(file) => file,
+    };
+
+    match PeFile::parse(&mut file) {
+      Err(PeError::InvalidNewOffset(0x100)) => {},
+      e                                     => panic!("Invalid response: {:?}", e),
+    };
+  }
 
   // --------------------------------------------------
 
