@@ -1,3 +1,4 @@
+use std::convert::From;
 use std::error;
 use std::fmt;
 use std::io;
@@ -52,5 +53,13 @@ impl error::Error for PeError {
       PeError::IOError(ref err) => Some(err as &error::Error),
       _                         => None,
     }
+  }
+}
+
+
+// Allow creating a PeError from an io::Error - helpful in the try! macro
+impl From<io::Error> for PeError {
+  fn from(err: io::Error) -> Self {
+    PeError::IOError(err)
   }
 }

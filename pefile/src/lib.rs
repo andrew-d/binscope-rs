@@ -37,25 +37,15 @@ impl PeFile {
   pub fn parse<RS>(src: &mut RS) -> Result<PeFile, PeError>
     where RS: io::Read + io::Seek
   {
-    let file_size = match Self::get_file_size(src) {
-      Ok(size) => size,
-      Err(err) => return Err(err),
-    };
+    let file_size = try!(Self::get_file_size(src));
 
     // Read a page from the file.
     let mut first_page = Vec::new();
     first_page.extend(std::iter::repeat(0).take(PAGE_SIZE));
 
-    match read_all(src, &mut first_page[..]) {
-      Err(err) => return Err(PeError::IOError(err)),
-      Ok(_)    => {},
-    };
+    try!(read_all(src, &mut first_page[..]));
 
-    let dos_header = match Self::get_dos_header(&first_page[..], file_size) {
-      Ok(hdr)  => hdr,
-      Err(err) => return Err(err),
-    };
-
+    let dos_header = try!(Self::get_dos_header(&first_page[..], file_size));
     let e_lfanew = dos_header.e_lfanew as usize;
 
     // If the NT headers and at least 16 section headers don't fit within the
@@ -85,10 +75,7 @@ impl PeFile {
   }
 
   fn get_file_size<S: io::Seek>(s: &mut S) -> Result<u64, PeError> {
-    let file_size = match size_from_seeker(s) {
-      Ok(size) => size,
-      Err(err) => return Err(PeError::IOError(err)),
-    };
+    let file_size = try!(size_from_seeker(s));
 
     // Validate file size.
     if file_size > std::u32::MAX as u64 {
