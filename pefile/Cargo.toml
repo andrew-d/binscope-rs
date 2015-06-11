@@ -1,0 +1,9 @@
+[package]
+name = "pefile"
+version = "0.0.1"
+authors = ["Andrew Dunham <andrew@du.nham.ca>"]
+
+[dependencies]
+log = "0.3"
+byteorder = "*"
+nom = "~0.3.0"
