@@ -56,9 +56,28 @@ impl PeFile {
       Err(err) => return Err(err),
     };
 
+    let e_lfanew = dos_header.e_lfanew as usize;
+
     // If the NT headers and at least 16 section headers don't fit within the
-    // first page, we read another 8KiB and use that instead.
-    // TODO
+    // first page, we read another 8KiB and use that instead.  Note that we use
+    // checked addition to prevent integer overflows.
+    let headers_size = e_lfanew
+      .checked_add(size_of::<NtHeaders>())
+      .and_then(|v| v.checked_add(16 * size_of::<SectionHeader>()));
+    match headers_size {
+      None      => return Err(PeError::IntegerOverflow("headers")),
+      Some(end) if end > PAGE_SIZE => {
+        // Read additional data for our NT headers.
+      },
+      Some(_)   => {/* Good - have all our headers. */}
+    };
+
+    // Validate that the offset plus the NT headers fits within the file.  We
+    // do this after the overflow check above, since we want to catch integer
+    // overflows first.
+    if (e_lfanew + size_of::<NtHeaders>()) as u64 > file_size {
+      return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
+    }
 
     Ok(PeFile{
       _foo: 1,
@@ -102,14 +121,6 @@ impl PeFile {
       return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
     }
 
-    // Ensure that we don't overflow.
-    let headers_size = (dos_header.e_lfanew as usize)
-      .checked_add(size_of::<NtHeaders>())
-      .map(|v| v.checked_add(16 * size_of::<SectionHeader>()));
-    if headers_size.is_none() {
-      return Err(PeError::IntegerOverflow("headers"));
-    }
-
     Ok(dos_header)
   }
 }
@@ -117,19 +128,22 @@ impl PeFile {
 
 #[cfg(test)]
 mod tests {
+  use std::error::Error;
+  use std::fs::File;
   use std::io;
+  use std::path::Path;
 
   use super::*;
   use super::error::PeError;
 
   #[test]
   fn test_too_large() {
-    let MAX_SIZE: i64 = 4294967296 + 10;
-    let mut s = DummySeekerReader{pos: 0, len: MAX_SIZE};
+    const MAX_SIZE: u64 = 4294967296 + 10;
+    let mut s = DummySeekerReader{pos: 0, len: MAX_SIZE as i64};
 
     match PeFile::parse(&mut s) {
-      Err(PeError::TooLarge(MAX_SIZE)) => {},
-      e                                => panic!("Invalid response: {:?}", e),
+      Err(PeError::TooLarge(m)) if m == MAX_SIZE => {},
+      e                                          => panic!("Invalid response: {:?}", e),
     };
   }
 
@@ -141,6 +155,21 @@ mod tests {
     match PeFile::parse(&mut cur) {
       Err(PeError::TooSmall(8)) => {},
       e                         => panic!("Invalid response: {:?}", e),
+    };
+  }
+
+  #[test]
+  fn test_invalid_lfanew() {
+    let path = Path::new("test_binaries").join("bad").join("negative-lfanew.exe");
+
+    let mut file = match File::open(&path) {
+      Err(why) => panic!("Couldn't open {}: {}", path.display(), Error::description(&why)),
+      Ok(file) => file,
+    };
+
+    match PeFile::parse(&mut file) {
+      Err(PeError::InvalidNewOffset(-1)) => {},
+      e                                  => panic!("Invalid response: {:?}", e),
     };
   }
 
@@ -157,7 +186,7 @@ mod tests {
       let new_pos = match pos {
         io::SeekFrom::Start(v)                => v as i64,
         io::SeekFrom::End(v) if v <= self.len => self.len - v,
-        io::SeekFrom::End(v)                  => panic!("invalid seek"),
+        io::SeekFrom::End(_)                  => panic!("invalid seek"),
         io::SeekFrom::Current(v)              => self.len + v,
       };
 
@@ -167,7 +196,7 @@ mod tests {
   }
 
   impl io::Read for DummySeekerReader {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
       Ok(0)
     }
   }
