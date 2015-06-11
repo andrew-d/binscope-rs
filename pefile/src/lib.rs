@@ -136,6 +136,7 @@ mod tests {
   use super::*;
   use super::error::PeError;
 
+  // Test a file that's too large.
   #[test]
   fn test_too_large() {
     const MAX_SIZE: u64 = 4294967296 + 10;
@@ -147,6 +148,7 @@ mod tests {
     };
   }
 
+  // Test a file that's too small.
   #[test]
   fn test_too_small() {
     let buf = b"toosmall";
@@ -158,6 +160,7 @@ mod tests {
     };
   }
 
+  // Test the case where the e_lfanew value is negative.
   #[test]
   fn test_negative_lfanew() {
     let path = Path::new("test_binaries").join("bad").join("negative-lfanew.exe");
@@ -173,6 +176,7 @@ mod tests {
     };
   }
 
+  // Test that the NT headers fit within the file.
   #[test]
   fn test_too_large_lfanew() {
     let path = Path::new("test_binaries").join("bad").join("too-large-lfanew.exe");
@@ -183,8 +187,8 @@ mod tests {
     };
 
     match PeFile::parse(&mut file) {
-      Err(PeError::InvalidNewOffset(0x100)) => {},
-      e                                     => panic!("Invalid response: {:?}", e),
+      Err(PeError::InvalidNewOffset(0x10)) => {},
+      e                                    => panic!("Invalid response: {:?}", e),
     };
   }
 
