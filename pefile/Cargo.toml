@@ -7,3 +7,4 @@ authors = ["Andrew Dunham <andrew@du.nham.ca>"]
 log = "0.3"
 byteorder = "*"
 nom = "~0.3.0"
+typemap = "*"
