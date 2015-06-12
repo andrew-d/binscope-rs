@@ -32,6 +32,7 @@ pub struct PeFile {
 }
 
 
+// Performs the verifications that Windows does upon the given DOS / NT header.
 fn verify_image_headers(dos_header: &DosHeader, nt_headers: &NtHeaders) -> Result<(), PeError> {
     if nt_headers.Signature != IMAGE_NT_SIGNATURE {
         return Err(PeError::InvalidNtSignature(nt_headers.Signature));
@@ -105,43 +106,43 @@ impl PeFile {
     /// Load a PE file by reading from the given source.
     pub fn parse<RS>(src: &mut RS) -> Result<PeFile, PeError>
         where RS: io::Read + io::Seek
-        {
-            let file_size = try!(Self::get_file_size(src));
+    {
+        let file_size = try!(Self::get_file_size(src));
 
-            // Read a page from the file.
-            let mut first_page = Vec::new();
-            first_page.extend(std::iter::repeat(0).take(PAGE_SIZE));
+        // Read a page from the file.
+        let mut first_page = Vec::new();
+        first_page.extend(std::iter::repeat(0).take(PAGE_SIZE));
 
-            try!(read_all(src, &mut first_page[..]));
+        try!(read_all(src, &mut first_page[..]));
 
-            let dos_header = try!(Self::get_dos_header(&first_page[..], file_size));
-            let e_lfanew = dos_header.e_lfanew as usize;
+        let dos_header = try!(Self::get_dos_header(&first_page[..], file_size));
+        let e_lfanew = dos_header.e_lfanew as usize;
 
-            // If the NT headers and at least 16 section headers don't fit within the
-            // first page, we read another 8KiB and use that instead.  Note that we use
-            // checked addition to prevent integer overflows.
-            let headers_size = e_lfanew
-                .checked_add(size_of::<NtHeaders>())
-                .and_then(|v| v.checked_add(16 * size_of::<SectionHeader>()));
-            match headers_size {
-                None      => return Err(PeError::IntegerOverflow("headers")),
-                Some(end) if end > PAGE_SIZE => {
-                    // Read additional data for our NT headers.
-                },
-                Some(_)   => {/* Good - have all our headers. */}
-            };
+        // If the NT headers and at least 16 section headers don't fit within the
+        // first page, we read another 8KiB and use that instead.  Note that we use
+        // checked addition to prevent integer overflows.
+        let headers_size = e_lfanew
+            .checked_add(size_of::<NtHeaders>())
+            .and_then(|v| v.checked_add(16 * size_of::<SectionHeader>()));
+        match headers_size {
+            None      => return Err(PeError::IntegerOverflow("headers")),
+            Some(end) if end > PAGE_SIZE => {
+                // Read additional data for our NT headers.
+            },
+            Some(_)   => {/* Good - have all our headers. */}
+        };
 
-            // Validate that the offset plus the NT headers fits within the file.  We
-            // do this after the overflow check above, since we want to catch integer
-            // overflows first.
-            if (e_lfanew + size_of::<NtHeaders>()) as u64 > file_size {
-                return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
-            }
-
-            Ok(PeFile{
-                _foo: 1,
-            })
+        // Validate that the offset plus the NT headers fits within the file.  We
+        // do this after the overflow check above, since we want to catch integer
+        // overflows first.
+        if (e_lfanew + size_of::<NtHeaders>()) as u64 > file_size {
+            return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
         }
+
+        Ok(PeFile{
+            _foo: 1,
+        })
+    }
 
     fn get_file_size<S: io::Seek>(s: &mut S) -> Result<u64, PeError> {
         let file_size = try!(size_from_seeker(s));
