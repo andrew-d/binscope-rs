@@ -38,7 +38,7 @@ fn verify_nt_headers(nt_headers: &NtHeaders) -> Result<(), PeError> {
         return Err(PeError::ImageIsNotExecutable);
     }
 
-    if nt_headers.FileHeader.NumberOfSections > 95 {
+    if nt_headers.FileHeader.NumberOfSections > IMAGE_MAX_NUMBER_OF_SECTIONS {
         return Err(PeError::TooManySections(nt_headers.FileHeader.NumberOfSections));
     }
 

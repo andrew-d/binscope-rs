@@ -147,3 +147,6 @@ pub const IMAGE_NT_SIGNATURE: u32 =           0x00004550; /* PE00 */
 
 pub const IMAGE_NT_OPTIONAL_HDR32_MAGIC: u16 = 0x10b;
 pub const IMAGE_NT_OPTIONAL_HDR64_MAGIC: u16 = 0x20b;
+
+// This constant is not in the NT headers, but was obtained from reverse-engineering.
+pub const IMAGE_MAX_NUMBER_OF_SECTIONS: u16 = 95;
