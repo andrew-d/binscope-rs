@@ -23,17 +23,8 @@ use types::*;
 use util::*;
 
 
-/// PeFile is the main structure that represents a parsed PE file.  It exposes
-/// various accessor methods that allow retrieving the associated data
-/// structures.
-#[derive(Debug)]
-pub struct PeFile {
-    _foo: u8,
-}
-
-
-// Performs the verifications that Windows does upon the given DOS / NT header.
-fn verify_image_headers(dos_header: &DosHeader, nt_headers: &NtHeaders) -> Result<(), PeError> {
+// Performs the verifications that Windows does upon the given NT header.
+fn verify_nt_headers(nt_headers: &NtHeaders) -> Result<(), PeError> {
     if nt_headers.Signature != IMAGE_NT_SIGNATURE {
         return Err(PeError::InvalidNtSignature(nt_headers.Signature));
     }
@@ -102,6 +93,16 @@ fn verify_image_headers(dos_header: &DosHeader, nt_headers: &NtHeaders) -> Resul
 }
 
 
+/// PeFile is the main structure that represents a parsed PE file.  It exposes
+/// various accessor methods that allow retrieving the associated data
+/// structures.
+#[derive(Debug)]
+pub struct PeFile {
+    dos_header: DosHeader,
+    nt_headers: NtHeaders,
+}
+
+
 impl PeFile {
     /// Load a PE file by reading from the given source.
     pub fn parse<RS>(src: &mut RS) -> Result<PeFile, PeError>
@@ -109,38 +110,23 @@ impl PeFile {
     {
         let file_size = try!(Self::get_file_size(src));
 
-        // Read a page from the file.
-        let mut first_page = Vec::new();
-        first_page.extend(std::iter::repeat(0).take(PAGE_SIZE));
+        // Read DOS header.
+        let dos_header = try!(Self::get_dos_header(src));
 
-        try!(read_all(src, &mut first_page[..]));
-
-        let dos_header = try!(Self::get_dos_header(&first_page[..], file_size));
-        let e_lfanew = dos_header.e_lfanew as usize;
-
-        // If the NT headers and at least 16 section headers don't fit within the
-        // first page, we read another 8KiB and use that instead.  Note that we use
-        // checked addition to prevent integer overflows.
-        let headers_size = e_lfanew
-            .checked_add(size_of::<NtHeaders>())
-            .and_then(|v| v.checked_add(16 * size_of::<SectionHeader>()));
-        match headers_size {
-            None      => return Err(PeError::IntegerOverflow("headers")),
-            Some(end) if end > PAGE_SIZE => {
-                // Read additional data for our NT headers.
-            },
-            Some(_)   => {/* Good - have all our headers. */}
-        };
-
-        // Validate that the offset plus the NT headers fits within the file.  We
-        // do this after the overflow check above, since we want to catch integer
-        // overflows first.
-        if (e_lfanew + size_of::<NtHeaders>()) as u64 > file_size {
+        // Ensure that the size of the DOS header is valid.
+        if dos_header.e_lfanew < 0 || (dos_header.e_lfanew as u64) > file_size {
             return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
         }
 
+        // Read the NT headers.
+        let nt_headers = try!(Self::get_nt_headers(src, &dos_header));
+
+        // Verify both headers.
+        try!(verify_nt_headers(&nt_headers));
+
         Ok(PeFile{
-            _foo: 1,
+            dos_header: dos_header,
+            nt_headers: nt_headers,
         })
     }
 
@@ -158,9 +144,23 @@ impl PeFile {
         Ok(file_size)
     }
 
-    fn get_dos_header(first_page: &[u8], file_size: u64) -> Result<DosHeader, PeError> {
+    // Reads the DOS header from the given file.
+    fn get_dos_header<RS>(src: &mut RS) -> Result<DosHeader, PeError>
+        where RS: io::Read + io::Seek
+    {
+        // Seek to the beginning.
+        try!(src.seek(io::SeekFrom::Start(0)));
+
+        // Create an appropriately-sized buffer.
+        const BUF_SIZE: usize = 1024;
+        let mut buf = Vec::new();
+        buf.extend(std::iter::repeat(0).take(BUF_SIZE));
+
+        // Read into the buffer, failing if any errors.
+        try!(read_all(src, &mut buf[..]));
+
         // Parse the DOS header from the buffer.
-        let dos_header = match parse_dos_header(first_page) {
+        let dos_header = match parse_dos_header(&buf[..]) {
             IResult::Done(_, header) => {
                 info!("Parsed DOS header");
                 debug!("{:#?}", header);
@@ -173,12 +173,67 @@ impl PeFile {
             }
         };
 
-        // Ensure that the size of the DOS header is valid.
-        if dos_header.e_lfanew < 0 || (dos_header.e_lfanew as u64) > file_size {
-            return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
-        }
-
         Ok(dos_header)
+    }
+
+    // Reads the NT header from the given file.
+    fn get_nt_headers<RS>(src: &mut RS, dos_header: &DosHeader) -> Result<NtHeaders, PeError>
+        where RS: io::Read + io::Seek
+    {
+        let e_lfanew = dos_header.e_lfanew as usize;
+
+        // Windows validates that, if the NT headers and at least 16 section
+        // headers don't fit within the first page, that they must fit within
+        // an additional 2 pages.  We aren't going to be quite so picky, for now.
+
+        // Figure out how large the NT headers are, and check for integer overflow.
+        let headers_size = e_lfanew
+            .checked_add(size_of::<NtHeaders>())
+            .and_then(|v| v.checked_add(16 * size_of::<SectionHeader>()));
+        let headers_size = match headers_size {
+            None => return Err(PeError::IntegerOverflow("headers")),
+            Some(x) => {
+                // TODO: windows does another check like so:
+                //    if (e_lfanew + size_of::<NtHeaders>()) as u64 > file_size {
+                //        return Err(PeError::InvalidNewOffset(dos_header.e_lfanew));
+                //    }
+                //
+                // What does this protect against / should we do it?
+
+                x
+            },
+        };
+
+        // We allocate a two-page-large buffer and read into this.  It's
+        // important that we do it this way (with a zero-initialized buffer),
+        // since the Windows loader will accept files that end before the end
+        // of the NT headers (which means the final fields are zero-filled).
+        let mut buf = Vec::new();
+        buf.extend(std::iter::repeat(0).take(8192));
+
+        // Seek to the right offset ...
+        try!(src.seek(io::SeekFrom::Start(e_lfanew as u64)));
+
+        // ... and read.
+        try!(read_all(src, &mut buf[..]));
+
+        // Parse the NT headers from this buffer.
+        let nt_headers = match parse_nt_headers(&buf[..]) {
+            IResult::Done(_, header) => {
+                info!("Parsed NT header");
+                debug!("{:#?}", header);
+
+                header
+            }
+            e => {
+                error!("Could not parse NT header: {:?}", e);
+
+                // TODO: stash error somewhere
+                return Err(PeError::InvalidNtHeaders);
+            }
+        };
+
+        Ok(nt_headers)
     }
 }
 
@@ -243,9 +298,10 @@ mod tests {
             Ok(file) => file,
         };
 
+        // TODO: specific error code?
         match PeFile::parse(&mut file) {
-            Err(PeError::InvalidNewOffset(0x10)) => {},
-            e                                    => panic!("Invalid response: {:?}", e),
+            Err(_) => {},
+            e      => panic!("Invalid response: {:?}", e),
         };
     }
 
