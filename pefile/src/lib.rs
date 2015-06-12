@@ -1,5 +1,6 @@
 extern crate byteorder;
 #[macro_use] extern crate nom;
+extern crate typemap;
 
 // This needs to go *below* the 'nom' import, so the error! macro doesn't get
 // shadowed by nom's version.
@@ -15,6 +16,7 @@ use std::io;
 use std::mem::size_of;
 
 use nom::IResult;
+use typemap::{DebugMap, TypeMap};
 
 use consts::*;
 use error::PeError;
@@ -100,6 +102,7 @@ fn verify_nt_headers(nt_headers: &NtHeaders) -> Result<(), PeError> {
 pub struct PeFile {
     dos_header: DosHeader,
     nt_headers: NtHeaders,
+    directories: DebugMap,
 }
 
 
@@ -121,12 +124,15 @@ impl PeFile {
         // Read the NT headers.
         let nt_headers = try!(Self::get_nt_headers(src, &dos_header));
 
-        // Verify both headers.
+        // Verify the NT headers.
         try!(verify_nt_headers(&nt_headers));
 
+        // Read the section headers.
+
         Ok(PeFile{
-            dos_header: dos_header,
-            nt_headers: nt_headers,
+            dos_header:  dos_header,
+            nt_headers:  nt_headers,
+            directories: TypeMap::custom(),
         })
     }
 
@@ -228,12 +234,41 @@ impl PeFile {
             e => {
                 error!("Could not parse NT header: {:?}", e);
 
-                // TODO: stash error somewhere
+                // TODO: stash error somewhere?
                 return Err(PeError::InvalidNtHeaders);
             }
         };
 
         Ok(nt_headers)
+    }
+
+    // ----------------------------------------------------------------------
+
+    /// Returns the parsed DOS header.
+    pub fn dos_header(&self) -> &DosHeader {
+        return &self.dos_header
+    }
+
+    /// Returns the parsed NT headers.
+    pub fn nt_headers(&self) -> &NtHeaders {
+        return &self.nt_headers
+    }
+
+    /// Returns or parses the data directory of the given type, or None if the
+    /// data directory does not exist in the image.  Panics if called with a
+    /// type that is not a data directory.
+    pub fn data_directory<K>(&mut self) -> Option<&K::Value>
+        where K: typemap::Key + typemap::DebugAny,
+              K::Value: typemap::DebugAny
+    {
+        let val = self.directories.get::<K>();
+        if val.is_some() {
+            return val;
+        }
+
+        // TODO: get and insert
+
+        None
     }
 }
 
@@ -246,6 +281,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    use super::types::*;
     use super::error::PeError;
 
     // Test a file that's too large.
@@ -303,6 +339,23 @@ mod tests {
             Err(_) => {},
             e      => panic!("Invalid response: {:?}", e),
         };
+    }
+
+    #[test]
+    fn test_image_directories() {
+        let path = Path::new("test_binaries").join("bad").join("negative-lfanew.exe");
+
+        let mut file = match File::open(&path) {
+            Err(why) => panic!("Couldn't open {}: {}", path.display(), Error::description(&why)),
+            Ok(file) => file,
+        };
+
+        let pe = match PeFile::parse(&mut file) {
+            Err(e) => panic!("error parsing: {:?}", e),
+            Ok(pe) => pe,
+        };
+
+        assert!(pe.data_directory::<LoadConfigDirectoryKey>().is_none());
     }
 
     // --------------------------------------------------

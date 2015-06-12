@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use typemap::Key;
+
 use consts::{
     IMAGE_NUMBEROF_DIRECTORY_ENTRIES,
     IMAGE_SIZEOF_SHORT_NAME
@@ -239,3 +241,14 @@ pub struct LoadConfigDirectory64 {
     pub SEHandlerTable:                 u64,
     pub SEHandlerCount:                 u64,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LoadConfigDirectory {
+    Directory32(LoadConfigDirectory32),
+    Directory64(LoadConfigDirectory64),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct LoadConfigDirectoryKey;
+
+impl Key for LoadConfigDirectoryKey { type Value = LoadConfigDirectory; }
