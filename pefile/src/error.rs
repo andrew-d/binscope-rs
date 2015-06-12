@@ -24,6 +24,18 @@ pub enum PeError {
 
     /// An integer overflow occured during parsing.
     IntegerOverflow(&'static str),
+
+    /// The NT signature was invalid.
+    InvalidNtSignature(u32),
+
+    /// There was an issue with the NT headers.
+    InvalidNtHeaders,
+
+    /// The image has too many sections.
+    TooManySections(u16),
+
+    /// The image did not have the IMAGE_FILE_EXECUTABLE_IMAGE flag set.
+    ImageIsNotExecutable,
 }
 
 
@@ -39,12 +51,16 @@ impl fmt::Display for PeError {
 impl error::Error for PeError {
     fn description(&self) -> &str {
         match *self {
-            PeError::IOError(_)          => "The underlying reader returned an error",
-            PeError::TooLarge(_)         => "The PE file is too large",
-            PeError::TooSmall(_)         => "The PE file is too small",
-            PeError::InvalidDosHeader(_) => "The DOS header is invalid",
-            PeError::InvalidNewOffset(_) => "The e_lfanew value is invalid",
-            PeError::IntegerOverflow(_)  => "An integer overflow occured during parsing",
+            PeError::IOError(_)            => "The underlying reader returned an error",
+            PeError::TooLarge(_)           => "The PE file is too large",
+            PeError::TooSmall(_)           => "The PE file is too small",
+            PeError::InvalidDosHeader(_)   => "The DOS header is invalid",
+            PeError::InvalidNewOffset(_)   => "The e_lfanew value is invalid",
+            PeError::IntegerOverflow(_)    => "An integer overflow occured during parsing",
+            PeError::InvalidNtSignature(_) => "The NT signature is invalid",
+            PeError::TooManySections(_)    => "The image has too many sections",
+            PeError::InvalidNtHeaders      => "The NT headers are invalid",
+            PeError::ImageIsNotExecutable  => "The image is not marked as executable",
         }
     }
 

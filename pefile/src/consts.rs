@@ -139,3 +139,11 @@ pub const IMAGE_SCN_MEM_WRITE: u32 = 0x80000000;
 pub const IMAGE_SCN_SCALE_INDEX: u32 = 0x00000001;
 
 pub const IMAGE_SIZEOF_SHORT_NAME: usize = 8;
+
+pub const IMAGE_DOS_SIGNATURE: u16 =          0x5A4D;     /* MZ */
+pub const IMAGE_OS2_SIGNATURE: u16 =          0x454E;     /* NE */
+pub const IMAGE_OS2_SIGNATURE_LE: u16 =       0x454C;     /* LE */
+pub const IMAGE_NT_SIGNATURE: u32 =           0x00004550; /* PE00 */
+
+pub const IMAGE_NT_OPTIONAL_HDR32_MAGIC: u16 = 0x10b;
+pub const IMAGE_NT_OPTIONAL_HDR64_MAGIC: u16 = 0x20b;

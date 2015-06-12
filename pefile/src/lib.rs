@@ -32,6 +32,75 @@ pub struct PeFile {
 }
 
 
+fn verify_image_headers(dos_header: &DosHeader, nt_headers: &NtHeaders) -> Result<(), PeError> {
+    if nt_headers.Signature != IMAGE_NT_SIGNATURE {
+        return Err(PeError::InvalidNtSignature(nt_headers.Signature));
+    }
+
+    if nt_headers.FileHeader.Machine == 0 &&
+       nt_headers.FileHeader.SizeOfOptionalHeader == 0 {
+        return Err(PeError::InvalidNtHeaders);
+    }
+
+    if nt_headers.FileHeader.Characteristics & IMAGE_FILE_EXECUTABLE_IMAGE == 0 {
+        return Err(PeError::ImageIsNotExecutable);
+    }
+
+    if nt_headers.FileHeader.NumberOfSections > 95 {
+        return Err(PeError::TooManySections(nt_headers.FileHeader.NumberOfSections));
+    }
+
+    macro_rules! validate_optional_header {
+        ($header:expr) => {
+            if $header.FileAlignment & 511 != 0 &&
+               $header.FileAlignment != $header.SectionAlignment {
+                return Err(PeError::InvalidNtHeaders);
+            }
+
+            if $header.FileAlignment == 0 {
+                return Err(PeError::InvalidNtHeaders);
+            }
+
+            if ! $header.SectionAlignment.is_power_of_two() ||
+               ! $header.FileAlignment.is_power_of_two() {
+                return Err(PeError::InvalidNtHeaders);
+            }
+
+            if $header.SectionAlignment < $header.FileAlignment {
+                return Err(PeError::InvalidNtHeaders);
+            }
+
+            if $header.SizeOfImage > 0x77000000 {
+                return Err(PeError::InvalidNtHeaders);
+            }
+
+            if $header.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC &&
+               nt_headers.FileHeader.Machine != IMAGE_FILE_MACHINE_I386 {
+                return Err(PeError::InvalidNtHeaders);
+            }
+
+            if $header.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC &&
+               (nt_headers.FileHeader.Machine != IMAGE_FILE_MACHINE_IA64 &&
+                nt_headers.FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64) {
+                return Err(PeError::InvalidNtHeaders);
+            }
+        }
+    }
+
+    match nt_headers.OptionalHeader {
+        OptionalHeader::Headers32(ref hdr) => {
+            validate_optional_header!(hdr);
+        },
+        OptionalHeader::Headers64(ref hdr) => {
+            validate_optional_header!(hdr);
+        },
+        OptionalHeader::Unknown => return Err(PeError::InvalidNtHeaders),
+    };
+
+    Ok(())
+}
+
+
 impl PeFile {
     /// Load a PE file by reading from the given source.
     pub fn parse<RS>(src: &mut RS) -> Result<PeFile, PeError>
