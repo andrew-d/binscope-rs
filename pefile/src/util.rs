@@ -27,6 +27,15 @@ pub fn read_all<R: io::Read>(r: &mut R, buf: &mut [u8]) -> io::Result<usize> {
 }
 
 
+/// Helper function that calls read with a given file offset.
+pub fn read_at<RS>(r: &mut RS, offset: u64, buf: &mut [u8]) -> io::Result<usize>
+    where RS: io::Read + io::Seek
+{
+    try!(r.seek(SeekFrom::Start(offset)));
+    r.read(buf)
+}
+
+
 #[cfg(test)]
 mod tests {
     use std::io;
@@ -52,6 +61,17 @@ mod tests {
         };
     }
 
+    #[test]
+    fn test_read_at() {
+        let buf: &[u8] = b"this is some text123";
+        let mut cur = io::Cursor::new(buf);
+
+        let mut rbuf = [0; 4];
+        read_at(&mut cur, 8, &mut rbuf[..]).unwrap();
+        assert_eq!(b"some", &rbuf[..]);
+    }
+
+    // --------------------------------------------------
 
     struct SlowReader<'a> {
         buf: &'a [u8],
