@@ -121,8 +121,20 @@ impl PeFile {
         // Read the NT headers.
         let nt_headers = try!(Self::get_nt_headers(src, &dos_header));
 
-        // Verify both headers.
+        // Verify the NT headers.
         try!(verify_nt_headers(&nt_headers));
+
+        // Read the section headers.
+        let section_headers_offset = 4 + size_of::<FileHeader>() + (nt_headers.FileHeader.SizeOfOptionalHeader as usize);
+        let num_sections = nt_headers.FileHeader.NumberOfSections as usize;
+
+        // Validate that the number of bytes doesn't overflow.
+        let sections_end = (dos_header.e_lfanew as usize)
+            .checked_add(section_headers_offset)
+            .and_then(|v| v.checked_add(num_sections * size_of::<SectionHeader>()));
+        if sections_end.is_none() {
+            return Err(PeError::IntegerOverflow("sections"));
+        }
 
         Ok(PeFile{
             dos_header: dos_header,
@@ -228,12 +240,24 @@ impl PeFile {
             e => {
                 error!("Could not parse NT header: {:?}", e);
 
-                // TODO: stash error somewhere
+                // TODO: stash error somewhere?
                 return Err(PeError::InvalidNtHeaders);
             }
         };
 
         Ok(nt_headers)
+    }
+
+    // ----------------------------------------------------------------------
+
+    /// Returns the parsed DOS header.
+    pub fn dos_header(&self) -> &DosHeader {
+        return &self.dos_header
+    }
+
+    /// Returns the parsed NT headers.
+    pub fn nt_headers(&self) -> &NtHeaders {
+        return &self.nt_headers
     }
 }
 
