@@ -12,6 +12,8 @@ mod parsers;
 mod types;
 mod util;
 
+use std::any::Any;
+use std::fmt::Debug;
 use std::io;
 use std::mem::size_of;
 
@@ -268,7 +270,7 @@ impl PeFile {
     /// data directory does not exist in the image.  Panics if called with a
     /// type that is not a data directory.
     pub fn data_directory<K>(&mut self) -> Option<&K::Value>
-        where K: typemap::Key + typemap::DebugAny,
+        where K: typemap::Key + Any + Debug,
               K::Value: typemap::DebugAny
     {
         let val = self.directories.get::<K>();
@@ -344,7 +346,7 @@ mod tests {
             Ok(file) => file,
         };
 
-        // TODO: specific error code?
+        // TODO: check for specific error code?
         match PeFile::parse(&mut file) {
             Err(_) => {},
             e      => panic!("Invalid response: {:?}", e),
@@ -353,19 +355,19 @@ mod tests {
 
     #[test]
     fn test_image_directories() {
-        // TODO: make dummy file with all data directories?
-        let path = Path::new("test_binaries").join("bad").join("negative-lfanew.exe");
+        let path = Path::new("test_binaries").join("x64").join("with-all-directories.exe");
 
         let mut file = match File::open(&path) {
             Err(why) => panic!("Couldn't open {}: {}", path.display(), Error::description(&why)),
             Ok(file) => file,
         };
 
-        let pe = match PeFile::parse(&mut file) {
+        let mut pe = match PeFile::parse(&mut file) {
             Err(e) => panic!("error parsing: {:?}", e),
             Ok(pe) => pe,
         };
 
+        // TODO: assert that these parse correctly too, as opposed to just typechecking
         assert!(pe.data_directory::<LoadConfigDirectoryKey>().is_none());
     }
 
