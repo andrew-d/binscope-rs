@@ -25,10 +25,10 @@ pub fn parse_dos_header(input: &[u8]) -> IResult<&[u8], DosHeader> {
         e_cs:       le_u16                          ~
         e_lfarlc:   le_u16                          ~
         e_ovno:     le_u16                          ~
-        e_res:      count_fixed!( call!(le_u16), u16, 4 )  ~
+        e_res:      count_fixed!( u16, le_u16, 4 )  ~
         e_oemid:    le_u16                          ~
         e_oeminfo:  le_u16                          ~
-        e_res2:     count_fixed!( call!(le_u16), u16, 10 ) ~
+        e_res2:     count_fixed!( u16, le_u16, 10 ) ~
         e_lfanew:   le_i32                          ,
 
         || {
@@ -304,7 +304,7 @@ pub fn parse_nt_headers(input: &[u8]) -> IResult<&[u8], NtHeaders> {
 
 pub fn parse_section_header(input: &[u8]) -> IResult<&[u8], SectionHeader> {
     chain!(input,
-        name:                          count_fixed!( call!(le_u8), u8, IMAGE_SIZEOF_SHORT_NAME ) ~
+        name:                          count_fixed!( u8, le_u8, IMAGE_SIZEOF_SHORT_NAME ) ~
         physicalAddressAndVirtualSize: le_u32 ~
         virtualAddress:                le_u32 ~
         sizeOfRawData:                 le_u32 ~
